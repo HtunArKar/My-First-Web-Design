@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="outputstyles.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
+</head>
+
+<body>
+
+    <h1>Resizing With Aspect Ratio (Tensorflow)</h1><br /><br />
+    <h2>Process along with smaller dimension (Cropping Method)</h2>
+
+    <p>
+        There are two types of resizing: upsampling and downsampling. The former adds pixels to the image
+        which leads to the blury picture while the latter removes pixels which might cause loss of useful
+        information. Moreover, unless <a href="#as">aspect ratio</a> is considered, the result image will
+        be disorted or squeezed one. <a href="#result">See in result section.</a>
+    </p><br />
+
+    <h2>Algorithm</h2>
+    <ol>
+        <li><a href="#Step-1" id="step-1">Extract spatial dimensions of the original image</a></li>
+        <li>
+            <a href="#Step-2" id="step-2">Compare these dimensions and prosess along smaller one. If height is smaller than width</a>
+            <ul>
+                <li>Set new_h = desired_height</li>
+                <li>Calculate new_w with respect to aspect ratio</li>
+                <li>Resize the image with new_h and new_w</li>
+                <li>Calculate the extra dimension of width (dw) to be cropped</li>
+            </ul>
+        </li>
+
+        <li>
+            <a href="#Step-3" id="step-3">Otherwise, process along width</a>
+            <ul>
+                <li>Set new_w = desired_width</li>
+                <li>Calculate new_h with respect to aspect ration</li>
+                <li>Resize the image with new_h and new_w</li>
+                <li>Calculate the extra dimension of height (dh) to be cropped</li>
+            </ul>
+        </li>
+        <li>
+            <a href="#Step-4" id="step-4">Perform cropping</a><br />
+            There are three options for cropping:
+            <ul>
+                <li>
+                    Cropping for height
+                    <ol>
+                        <li>Crop from the top, just use dh</li>
+                        <li>Crop from the bottom, just use dh</li>
+                        <li>Crop equally from both top and bottom, use dh = dh / 2</li>
+                    </ol>
+                </li>
+
+                <li>
+                    Cropping for width
+                    <ol>
+                        <li>Crop from the left, just use dw</li>
+                        <li>Crop from the right, just use dw</li>
+                        <li>Crop equally from both left and righ, use dw = dw / 2</li>
+                    </ol>
+                </li>
+                <li><a href="#fig">See Figure</a></li>
+            </ul>
+
+        </li>
+    </ol>
+
+    <h2 id="as">Aspect Ratio</h2>
+    <div class="aspect_ratio">
+        Aspect ratio is generally the proportional relationship between image width and height.
+        Maintaining aspect ratio means if image's height is increased or decreased a times,
+        then its width should also be increased or decreased a times. At that time,
+        the aspect ratio of original and resized images will not be changed.
+        <a href="https://en.wikipedia.org/wiki/Aspect_ratio_(image)">More</a><br /><br />
+
+        <div>
+            <b>General Mathematical Calculation</b>
+            <ul>
+                <li><b>aspect ratio = orig_w &divide; orig_h</b></li>
+                <li>If orig_h = 188 and orig_w = 267, aspect ratio is 1.42.</li>
+                <li>If height is increased to 224, then new_h = 224.</li>
+                <li>ratio = new_h &divide; orig_h = 224 &divide; 188 = 1.19.</li>
+                <li>Height increase 1.19 times, so width should also increase 1.19 times.</li>
+                <li>new_w = orig_w * 1.19 = 318, so aspect ratio = new_w &divide; new_h = 1.42.</li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>Programming Section</h2>
+    <div class="program">
+        <b>Program Explanation with Tensorflow</b><br /><br />
+        <a id="Step-1" href="#step-1">Step-1</a>
+        <div class="codeblock">
+            <span class="comment"># import necessary packages</span><br />
+            import tensorflow as tf <br />
+            from matplotlib import pyplot as plt <br /><br />
+
+            <span class="comment"># load input image, decode it and convert to float32 and range [0, 1]</span><br />
+            image = tf.io.read_file("/content/drive/MyDrive/KMUTT/zebra.jpg") <br />
+            image = tf.image.decode_image(image, channels=3, expand_animations=False) <br />
+            image = tf.cast(image, tf.float32) / 255.0 <br /><br />
+
+            <span class="comment"># set desired height and width</span><br />
+            (desired_height, desired_width) = (224, 224) <br />
+
+            print("[INFO] Original spatial dimension: {}".format(tf.shape(image)[:2])) <br />
+            print("[INFO] Desired saptial dimension: {}".format([desired_height, desired_width])) <br />
+
+            plt.imshow(image) <br />
+            plt.title("Original Image") <br />
+            plt.show() <br /><br />
+
+            <span class="comment"># extract original spatial dimension</span><br />
+            shape = tf.shape(image)[:2]<br />
+            orig_h = shape[0]<br />
+            orig_w = shape[1]<br /><br />
+
+            <span class="comment"># initialize dh and dw</span><br />
+            dh = 0<br />
+            dw = 0<br />
+        </div><br />
+
+        <b>Output Step-1</b><br />
+        <div>
+            [INFO] Original spatial dimension: [188 267]<br />
+            [INFO] Desired saptial dimension: [224, 224]
+        </div><br />
+        <img src="images/image1.png" height="188" width="267" alt="Original Image" /><br /><br />
+
+        <a id="Step-2" href="#step-2">Step-2</a>
+        <div style="font-size: 16px">if orig_h < orig_w:</div>
+        <div class="loop">
+            <span class="comment"># process along height, set desired height as new height</span><br />
+            <span class="comment"># and calculate new width with respect to aspect ratio</span><br />
+
+            new_h = desired_height<br />
+
+            ar = tf.cast(new_h, tf.float32) / tf.cast(orig_h, tf.float32)<br />
+            new_w = tf.cast(tf.cast(orig_w, tf.float32) * ar, tf.int32)<br /><br />
+
+            <span class="comment"># resize the image with new height and width</span><br />
+            resized = tf.image.resize(image, [new_h, new_w])<br /><br />
+
+            <span class="comment"># calcualte the amount of width to be trimmed from the current image to get the desired size</span><br />
+            dw = tf.cast((tf.shape(resized)[1] - desired_width) / 2, tf.int32)<br />
+
+            print("[INFO] Spatial dimension of current image: {}".format(tf.shape(resized)[:2]))<br />
+            print("[INFO] Amount to be cropped from the current image: {}".format(dw))<br />
+
+            plt.imshow(resized)<br />
+            plt.title("Current Resized Image")<br />
+            plt.show()<br />
+
+        </div><br />
+
+        <b>Output Step-2</b><br />
+        <div>
+            [INFO] Spatial dimension of current image: [224 318]<br />
+            [INFO] Amount to be cropped from the current image: 47
+        </div><br />
+        <img src="images/image2.png" height="224" width="318" alt="Current Image" /><br /><br />
+
+        <a id="Step-3" href="#step-3">Step-3</a>
+        <div style="font-size: 16px">else:</div>
+        <div class="loop">
+            <span class="comment"># process along width, set desired width as new width</span><br />
+            <span class="comment"># and calculate new height</span><br />
+
+
+            new_w = desired_width<br />
+
+            ar = tf.cast(new_w, tf.float32) / tf.cast(orig_w, tf.float32)<br />
+            new_h = tf.cast(tf.cast(orig_h, tf.float32) * ar, tf.int32)<br /><br />
+
+            <span class="comment"># resize the image with new height and width</span><br />
+            resized = tf.image.resize(image, [new_h, new_w])<br /><br />
+
+            <span class="comment"># calcualte the amount of height to be trimmed from the current image to get the desired size</span><br />
+            dh = tf.cast((tf.shape(resized)[0] - desired_height) / 2, tf.int32)<br />
+
+            print("[INFO] Spatial dimension of current image: {}".format(tf.shape(resized)[:2]))<br />
+            print("[INFO] Amount to be cropped from the current image: {}".format(dw))<br />
+
+            plt.imshow(resized)<br />
+            plt.title("Current Resized Image")<br />
+            plt.show()<br />
+
+        </div><br /><br />
+
+        <a id="Step-4" href="#step-4">Step-4</a>
+        <div class="codeblock">
+            <span class="comment"># perform cropping to get the desired spatial dimension</span><br />
+
+            resized = tf.slice(resized, [dh, dw, 0], [desired_height, desired_width, 3])<br />
+
+            print("[INFO] Spatial dimension of result image: {}".format(tf.shape(resized)))<br />
+
+            plt.imshow(resized)<br />
+            plt.title("Output Image")<br />
+            plt.show()<br />
+        </div><br />
+
+        <b>Output Step-4</b><br />
+        <div>
+            [INFO] Spatial dimension of result image: [224 224   3]
+        </div><br />
+        <img src="images/image3.png" height="224" width="224" alt="Resized Image" /><br /><br />
+
+
+    </div><br /><br />
+
+    <div style="font-size: 20px"><b>Three Cropping Options</b></div>
+    <div class="options">
+        <p>
+            If option 1 and 2 are used, it is likely to affect the object depending on
+            the amoumt that to be cropped. So, option 3 is better than the former two
+            becasue it divides <b>dw</b> or <b>dh</b> by 2 and prevents the object from being cropped.
+            This process is the same for height cropping.
+        </p>
+        <img src="images/image4.png" alt="Cropping Options" height="480" class="img_center" />
+        <div id="fig" style="text-align: center"><b>Figure: Cropping Options</b></div>
+
+    </div><br /><br />
+
+    <h2>Results Section</h2>
+    <img src="images/image5.png" alt="Result Image" height="480" class="img_center" />
+    <div id="result" style="text-align: center" class="options"><b>Figure: 
+        Results of resizing with or without aspect ratio</b></div>
+
+    <h2>Resources Section</h2>
+    <a href="https://www.tensorflow.org/api_docs/python/tf/cast">tf.cast</a><br />
+    <a href="https://www.tensorflow.org/api_docs/python/tf/shape">tf.shape</a><br />
+    <a href="https://www.tensorflow.org/api_docs/python/tf/slice">tf.slice</a><br />
+    <a href="https://www.tensorflow.org/api_docs/python/tf/image/resize">tf.image.resize</a><br />
+    <a href="https://matplotlib.org/stable/tutorials/images.html#sphx-glr-tutorials-images-py">
+        Image Tutorial with matplotlib
+    </a>
+
+</body>
+</html>
