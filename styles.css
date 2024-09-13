@@ -40,3 +40,10 @@ ol, p, .aspect_ratio, .program, .options{
 .fig_label{
     text-align: center;
 }
+
+@media(max-width: 500px){
+    img{
+        width: 100%;
+        height: auto;
+    }
+}
